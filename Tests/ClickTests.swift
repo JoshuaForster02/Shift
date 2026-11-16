@@ -29,6 +29,13 @@ import Foundation
         check(ClickProtocol.activation == [Data([82,105,100,101,79,110,2,3]), Data([0,8,0]), Data([0,8,16])], "V2 activation sequence")
         check(ClickProtocol.needsActivation(Data([255,3,1])), "Server challenge detected")
         check(!ClickProtocol.needsActivation(Data([255])), "Truncated challenge ignored")
+        check(ClickButtons.decode(Data([0x37,8,0,16,1]), version: 1) == ClickButtons(plus: true, minus: false), "V1 plus press")
+        check(ClickButtons.decode(Data([0x37,8,1,16,0]), version: 1) == ClickButtons(plus: false, minus: true), "V1 minus press")
+        check(ClickButtons.decode(Data([0x37,8,1,16,1]), version: 1) == .released, "V1 release")
+        check(ClickButtons.decode(Data([0x37,8,1]), version: 1) == ClickButtons(plus: false, minus: true), "V1 protobuf default enum")
+        for b: [UInt8] in [[0x37], [0x37,8,128], [0x37,8,2,16,1], [0x37,8,1,8,0], [0x37,8,1,18,20,0], [0x23,8,0]] {
+            check(ClickButtons.decode(Data(b), version: 1) == nil, "Invalid V1 ignored")
+        }
         print("\(count) Click V2 checks passed")
     }
 }

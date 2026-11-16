@@ -9,7 +9,7 @@ A small native macOS controller bridge for MyWhoosh. Apple Silicon and Intel, ma
 3. Choose **Shift** in the training app’s controller pairing screen and enable MyShift in MyWhoosh.
 4. D-pad right shifts up; left shifts down. Swap direction or disable hold-to-repeat in Shift.
 
-The controller and training app communicate over the local network. Shift does not replace a smart trainer. Supports OS gamepads and direct Zwift Click V2 pairing (beta, firmware-dependent activation may be required). Keyboard-mode Anki remotes are not supported.
+The controller and training app communicate over the local network. Shift does not replace a smart trainer. Supports macOS gamepads, Click V1 (unencrypted), Click V2 (firmware-dependent activation) and learnable keyboard/HID remotes. Six gamepad layouts and optional app-targeted keyboard output are available. See SUPPORT.md for exact support and limits.
 
 ## Build and test
 
@@ -49,3 +49,14 @@ Protokollquelle: thomaschampagne/zwiftboard, MIT, Revision
 ee4b1f2156d316398f71aeb09b67282901456b8e. Vollständige Attribution in
 THIRD_PARTY_NOTICES.md. Kein Code der nichtkommerziell lizenzierten
 BikeControl-App wurde übernommen.
+
+## Shift 1.2
+Controllerquelle aus Gamepad, Click V1, Click V2 oder Tastatur wählen.
+Gamepad-Belegung über das Menü ändern. HID-Tasten mit „Hoch“/„Runter“ anlernen.
+Für die Tastenausgabe eine laufende Ziel-App und zwei Tasten wählen und
+anschließend ausdrücklich aktivieren. Bedienungshilfen werden nur auf
+Anforderung geöffnet; Freigaben werden nicht automatisch gesetzt.
+Beim Lernen wird die Ausgabe deaktiviert. Quellwechsel, Programmende und
+Trennung geben gehaltene Tasten frei; eigene Ausgaben werden nicht erneut
+als Eingabe verarbeitet. Keine Texteingaben oder Verlaufsspeicherung.
+Vollständige Kompatibilitätsmatrix: [SUPPORT.md](SUPPORT.md).

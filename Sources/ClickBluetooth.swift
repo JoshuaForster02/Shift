@@ -14,6 +14,7 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     var onButtons: ((ClickButtons) -> Void)?
     private(set) var message = "Click V2 direkt in Shift verbinden."
     private(set) var scanning = false
+    private var version = 2
     private var central: CBCentralManager?
     private var wantedScan = false
     private var scanTimer: Timer?
@@ -43,14 +44,19 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     }
     var devices: [ClickDevice] {
         found.values.map { p in
-            ClickDevice(id: p.identifier, name: labels[p.identifier] ?? p.name ?? "Zwift Click V2",
+            ClickDevice(id: p.identifier, name: labels[p.identifier] ?? p.name ?? "Zwift Click",
                         status: sessions[p.identifier]?.status ?? "Gefunden", connected: sessions[p.identifier] != nil)
         }.sorted { $0.name == $1.name ? $0.id.uuidString < $1.id.uuidString : $0.name < $1.name }
     }
     var readyName: String? {
-        sessions.values.contains(where: { $0.active }) ? "Zwift Click V2" : nil
+        sessions.values.contains(where: { $0.active }) ? "Zwift Click V\(version)" : nil
     }
-    func scan() {
+    func selectVersion(_ version: Int) {
+        stop(); found.removeAll(); self.version = version
+        message = "Click V\(version) direkt in Shift verbinden."; onChange?()
+    }
+    func scan(version: Int = 2) {
+        if self.version != version { selectVersion(version) }
         wantedScan = true
         if central == nil { central = CBCentralManager(delegate: self, queue: .main) }
         powerTimer?.invalidate()
@@ -64,12 +70,12 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     private func beginScan() {
         wantedScan = false; powerTimer?.invalidate(); scanTimer?.invalidate()
         found = found.filter { sessions[$0.key] != nil }
-        scanning = true; message = "Beide Click V2 aufwecken. Suche läuft …"
+        scanning = true; message = version == 1 ? "Click V1 aufwecken. Suche läuft …" : "Beide Click V2 aufwecken. Suche läuft …"
         central?.scanForPeripherals(withServices: nil)
         scanTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in
             guard let self else { return }
             self.central?.stopScan(); self.scanning = false
-            self.message = self.found.isEmpty ? "Kein Click V2 gefunden. Controller wecken und Zwift schließen." : "Beide V2-Controller nacheinander verbinden."
+            self.message = self.found.isEmpty ? "Kein Click gefunden. Controller wecken und Zwift schließen." : (self.version == 1 ? "Click V1 verbinden und eine Taste prüfen." : "Beide V2-Controller nacheinander verbinden.")
             self.onChange?()
         }
         onChange?()
@@ -77,7 +83,7 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     func connect(_ id: UUID) {
         guard sessions[id] == nil, let p = found[id] else { return }
         guard !disconnecting.contains(id) else { message = "Vorige Verbindung wird beendet. Bitte kurz erneut versuchen."; onChange?(); return }
-        guard sessions.count < 2 else { message = "Es sind bereits zwei Controller verbunden."; onChange?(); return }
+        guard sessions.count < (version == 1 ? 1 : 2) else { message = "Es sind bereits zwei Controller verbunden."; onChange?(); return }
         let s = Session(p); sessions[id] = s; p.delegate = self
         s.deadline = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self, weak s] _ in
             guard let self, let s, self.sessions[id] === s else { return }
@@ -111,7 +117,8 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         let name = a[CBAdvertisementDataLocalNameKey] as? String ?? p.name ?? ""
         let manufacturer = Array(a[CBAdvertisementDataManufacturerDataKey] as? Data ?? Data())
         let pod = manufacturer.count >= 3 && manufacturer[0] == 0x4a && manufacturer[1] == 0x09 ? manufacturer[2] : 0
-        guard pod == 0x0a || pod == 0x0b || name.lowercased().contains("zwift click") else { return }
+        let knownV2 = pod == 0x0a || pod == 0x0b
+        guard (version == 2 && knownV2) || (!knownV2 && name.lowercased().contains("zwift click")) else { return }
         found[p.identifier] = p
         labels[p.identifier] = pod == 0x0a ? "Click V2 rechts (+)" : (pod == 0x0b ? "Click V2 links (−)" : name)
         onChange?()
@@ -144,7 +151,7 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         s.subscribed.insert(c.uuid)
         guard s.subscribed.contains(async), s.subscribed.contains(tx), s.timer == nil else { return }
         s.deadline?.invalidate(); s.status = "Taste zum Prüfen drücken"
-        for (i, data) in ClickProtocol.activation.enumerated() {
+        for (i, data) in (version == 1 ? [ClickProtocol.rideOn] : ClickProtocol.activation).enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) { [weak self, weak s] in
                 guard let self, let s, self.sessions[p.identifier] === s else { return }
                 self.enqueue(data, s)
@@ -184,12 +191,12 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     func peripheral(_ p: CBPeripheral, didUpdateValueFor c: CBCharacteristic, error: Error?) {
         guard let s = sessions[p.identifier], c.uuid == async || c.uuid == tx, error == nil, let data = c.value else { return }
         if ClickProtocol.needsActivation(data) {
-            s.status = "Zwift-Aktivierung prüfen"; s.active = false
+            s.status = version == 1 ? "Verschlüsseltes Protokoll: noch nicht unterstützt" : "Zwift-Aktivierung prüfen"; s.active = false
             buttons = .released; onButtons?(.released)
-            if !s.acked { s.acked = true; enqueue(ClickProtocol.acknowledgement, s) }
+            if version == 2 && !s.acked { s.acked = true; enqueue(ClickProtocol.acknowledgement, s) }
             onChange?(); return
         }
-        guard let next = ClickButtons.decode(data) else { return }
+        guard let next = ClickButtons.decode(data, version: version) else { return }
         if !s.active { s.active = true; s.status = "Tasten kommen an"; onChange?() }
         // Both V2 pods can mirror the entire pair bitmap. Share state.
         if next != buttons { buttons = next; onButtons?(next) }
