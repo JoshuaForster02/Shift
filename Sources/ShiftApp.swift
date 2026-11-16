@@ -10,6 +10,7 @@ struct ShiftApp: App {
                 .frame(minWidth: 440, idealWidth: 480, maxWidth: 620, minHeight: 560, idealHeight: 620)
                 .preferredColorScheme(.dark)
                 .onAppear { model.start() }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in model.stop() }
                 .onOpenURL { url in
                     guard url.scheme == "shift", url.host == "open" else { return }
                     NSApp.activate(ignoringOtherApps: true)
@@ -53,16 +54,33 @@ struct ShiftView: View {
                     Text(model.headline).font(.system(size: 30, weight: .semibold, design: .rounded)).tracking(-0.7)
                     Text(model.subtitle).font(.system(size: 13)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                Picker("Controller", selection: Binding(get: { model.useClick }, set: { model.selectClick($0) })) {
-                    Text("Gamepad / Shanwan").tag(false)
-                    Text("Zwift Click V2").tag(true)
+                Picker("Controller", selection: Binding(get: { model.source }, set: { model.selectSource($0) })) {
+                    ForEach(ControllerSource.allCases) { source in Text(source.title).tag(source) }
                 }.pickerStyle(.segmented)
+                if model.source == .gamepad {
+                    Picker("Tastenbelegung", selection: $model.gamepadBinding) {
+                        ForEach(GamepadBinding.allCases) { binding in Text(binding.title).tag(binding) }
+                    }
+                }
+                if model.source == .keyboard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Für Anki-Remotes und Bluetooth-HID-Tastaturen. Nur die beiden angelernten Tasten werden im Hintergrund ausgewertet.").font(.system(size: 11)).foregroundStyle(.secondary)
+                        HStack {
+                            Button("Hoch: \(model.inputUp.title)") { model.learn(.inputUp) }
+                            Button("Runter: \(model.inputDown.title)") { model.learn(.inputDown) }
+                        }
+                        if !model.keyboard.trusted {
+                            Button("Bedienungshilfen erlauben") { model.keyboard.askPermission() }
+                        }
+                        Button("Zugriff erneut prüfen") { model.refreshTargets() }
+                    }
+                }
                 if model.useClick {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Text(model.click.message).font(.system(size: 11)).foregroundStyle(.secondary)
                             Spacer()
-                            Button(model.click.scanning ? "Sucht …" : "V2 suchen") { model.scanClick() }.disabled(model.click.scanning)
+                            Button(model.click.scanning ? "Sucht …" : "Click suchen") { model.scanClick() }.disabled(model.click.scanning)
                         }
                         ForEach(model.click.devices) { device in
                             HStack {
@@ -76,16 +94,48 @@ struct ShiftView: View {
                                 }
                             }
                         }
-                        DisclosureGroup("Wenn der linke V2 keine Tasten sendet") {
-                            Text("Je nach Firmware ist eine zeitlich begrenzte Aktivierung durch Zwift nötig: beide Controller dort verbinden und Tasten prüfen, Zwift vollständig schließen und hier erneut verbinden. Shift erneuert diese Freigabe nicht automatisch. Click V2 ist eine Beta-Anbindung; ein echter Fahrtest steht noch aus.")
+                        DisclosureGroup("Firmware und Aktivierung") {
+                            Text("Click V1 wird mit unverschlüsseltem Protokoll unterstützt. Verschlüsselte V1-Firmware ist noch nicht unterstützt. Bei V2 ist je nach Firmware eine zeitlich begrenzte Aktivierung durch Zwift nötig: beide Controller dort verbinden und Tasten prüfen, Zwift vollständig schließen und hier erneut verbinden. Shift erneuert diese Freigabe nicht automatisch. Click V2 ist eine Beta-Anbindung; ein echter Fahrtest steht noch aus.")
                                 .font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 5)
                         }.font(.system(size: 11))
                     }
                 }
+                Picker("Ausgabe", selection: Binding(get: { model.outputMode }, set: { model.selectOutput($0) })) {
+                    ForEach(OutputMode.allCases) { mode in Text(mode.title).tag(mode) }
+                }
+                if model.outputMode == .keyboard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Picker("Ziel-App", selection: $model.targetBundleID) {
+                            if !model.targets.contains(where: { $0.id == model.targetBundleID }) {
+                                Text("Ziel-App starten").tag(model.targetBundleID)
+                            }
+                            ForEach(model.targets) { target in Text(target.name).tag(target.id) }
+                        }
+                        HStack {
+                            Button("Hoch: \(model.outputUp.title)") { model.learn(.outputUp) }
+                            Button("Runter: \(model.outputDown.title)") { model.learn(.outputDown) }
+                        }
+                        HStack {
+                            Button("Apps / Zugriff prüfen") { model.refreshTargets() }
+                            if model.keyboard.trusted {
+                                Button(model.outputArmed ? "Ausgabe deaktivieren" : "Tastenausgabe aktivieren") {
+                                    if model.outputArmed { model.disarmOutput() } else { model.armOutput() }
+                                }
+                            } else {
+                                Button("Bedienungshilfen erlauben") { model.keyboard.askPermission() }
+                            }
+                        }
+                        Text("Sendet nur an die ausgewählte laufende App. Die App muss diese Tasten unterstützen. Tastenausgabe allein erzeugt keine virtuellen Gänge.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
+                if let learning = model.learningText {
+                    HStack { Text(learning); Spacer(); Button("Abbrechen") { model.cancelLearning() } }.font(.system(size: 12))
+                }
                 VStack(spacing: 0) {
                     status("gamecontroller", title: "Controller", value: model.controllerName ?? "Nicht verbunden", active: model.controllerName != nil)
                     Divider().opacity(0.5)
-                    status("antenna.radiowaves.left.and.right", title: "MyWhoosh", value: model.connected ? (model.appName ?? "Verbunden") : "Noch nicht verbunden", active: model.connected)
+                    status("antenna.radiowaves.left.and.right", title: model.outputTitle, value: model.outputStatus, active: model.connected)
                 }
                 HStack(spacing: 24) {
                     direction(.down, arrow: "arrow.left", key: model.reversed ? "Rechts" : "Links")
@@ -94,7 +144,7 @@ struct ShiftView: View {
                 }.frame(maxWidth: .infinity).padding(.vertical, 8)
                 VStack(spacing: 13) {
                     Toggle("Gedrückt halten: mehrere Gänge", isOn: $model.holdToRepeat).toggleStyle(.switch).controlSize(.small)
-                    Toggle(model.useClick ? "Plus und Minus tauschen" : "Links und rechts tauschen", isOn: $model.reversed).toggleStyle(.switch).controlSize(.small)
+                    Toggle("Schaltrichtung tauschen", isOn: $model.reversed).toggleStyle(.switch).controlSize(.small)
                 }.font(.system(size: 12))
                 HStack {
                     Circle().fill(model.ready ? accent : .gray).frame(width: 5, height: 5)
@@ -112,15 +162,19 @@ struct ShiftView: View {
                 }.buttonStyle(.borderless)
                 if showHelp {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("1  Gamepad in macOS verbinden; Click V2 über „V2 suchen“ direkt in Shift.")
+                        Text("1  Gamepad/HID in macOS verbinden; Click V1/V2 direkt in Shift suchen.")
                         Text("2  Lokales Netzwerk für Shift erlauben.")
                         Text("3  In MyWhoosh „Shift“ als Controller auswählen und MyShift aktivieren.")
                         Text("Mac und Trainings-App müssen im selben lokalen Netzwerk sein. Shift sendet ausschließlich Controller-Befehle; es ersetzt keinen Smart-Trainer.")
                             .foregroundStyle(.secondary)
                     }.font(.system(size: 12)).transition(.opacity)
                 }
+                DisclosureGroup("Controller und Grenzen") {
+                    Text("Enthalten: Click V1 (unverschlüsselt), Click V2 (Aktivierung ggf. nötig), macOS-Gamepads mit sechs Belegungen sowie Tastatur-/HID-Remotes mit zwei anlernbaren Tasten. Ausgabe per MyWhoosh-Netzwerk oder als Tasten an eine ausgewählte Mac-App. Noch nicht enthalten: Zwift Play/Ride, verschlüsselter V1, Di2, SRAM AXS, CYCPLUS, Thinkrider, Wahoo-Bike, Elite, Wheeltop, reine Medien-Tasten, ANT+, Bluetooth-Geräteemulation oder direkte Trainer-Widerstandssteuerung. Tastatur-Modi dieser Geräte können ggf. über HID genutzt werden. Protokolltests vorhanden; echte Gerätekompatibilität muss je Modell geprüft werden.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 5)
+                }.font(.system(size: 11))
                 HStack {
-                    Text("1.1.0 · Click V2 Beta · Lokal.")
+                    Text("1.2.0 · Lokal · Controller-Beta")
                     Spacer()
                     Link("Quellcode", destination: URL(string: "https://github.com/JoshuaForster02/Shift")!)
                 }.font(.system(size: 10)).foregroundStyle(.tertiary)
@@ -145,7 +199,7 @@ struct ShiftView: View {
                 Image(systemName: arrow).font(.system(size: 28, weight: .light))
                     .foregroundStyle(model.lastDirection == action ? accent : .white)
                 Text(action == .up ? "Hoch" : "Runter").font(.system(size: 14, weight: .semibold))
-                Text(model.useClick ? (action == .up ? (model.reversed ? "Click −" : "Click +") : (model.reversed ? "Click +" : "Click −")) : "Steuerkreuz \(key.lowercased())").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text(model.useClick ? (action == .up ? (model.reversed ? "Click −" : "Click +") : (model.reversed ? "Click +" : "Click −")) : (model.source == .keyboard ? (action == .up ? model.inputUp.title : model.inputDown.title) : model.gamepadBinding.title)).font(.system(size: 10)).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity).contentShape(Rectangle())
         }.buttonStyle(.plain).disabled(!model.connected).help(action.title)
     }
