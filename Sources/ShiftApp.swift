@@ -6,8 +6,10 @@ struct ShiftApp: App {
     @StateObject private var model = ShiftModel()
     var body: some Scene {
         WindowGroup("Shift") {
-            ShiftView(model: model)
-                .frame(minWidth: 440, idealWidth: 480, maxWidth: 620, minHeight: 560, idealHeight: 620)
+            Group {
+                if model.showSetup { SetupView(model: model) } else { ShiftView(model: model) }
+            }
+                .frame(minWidth: 460, idealWidth: 500, maxWidth: 660, minHeight: 600, idealHeight: 700)
                 .preferredColorScheme(.dark)
                 .onAppear { model.start() }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in model.stop() }
@@ -17,7 +19,7 @@ struct ShiftApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 480, height: 620)
+        .defaultSize(width: 500, height: 700)
         .commands {
             CommandMenu("Fahren") {
                 Button("Hochschalten") { model.pulse(.up) }.keyboardShortcut(.upArrow, modifiers: .command)
@@ -40,6 +42,7 @@ struct ShiftApp: App {
 struct ShiftView: View {
     @ObservedObject var model: ShiftModel
     @State private var showHelp = false
+    @State private var showAdvanced = false
     private let accent = Color(red: 0.32, green: 0.65, blue: 1)
     var body: some View {
         ScrollView {
@@ -48,12 +51,25 @@ struct ShiftView: View {
                     Image(systemName: "bicycle").font(.system(size: 20, weight: .medium)).foregroundStyle(accent)
                     Text("Shift").font(.system(size: 17, weight: .semibold))
                     Spacer()
+                    Button("Einrichten") { model.beginSetup() }.font(.system(size: 11)).buttonStyle(.borderless)
                     Text("MAC").font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.secondary)
                 }.padding(.top, 14)
                 VStack(alignment: .leading, spacing: 10) {
                     Text(model.headline).font(.system(size: 30, weight: .semibold, design: .rounded)).tracking(-0.7)
                     Text(model.subtitle).font(.system(size: 13)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
+                if model.source == .clickV2 {
+                    HStack(spacing: 20) {
+                        Label("Links · −", systemImage: model.click.leftReady ? "checkmark.circle.fill" : "circle")
+                        Label("Rechts · +", systemImage: model.click.rightReady ? "checkmark.circle.fill" : "circle")
+                    }.font(.system(size: 12)).foregroundStyle(.secondary)
+                    HStack {
+                        Button(model.click.scanning ? "Suche läuft …" : "Beide suchen") { model.scanClick() }.disabled(model.click.scanning)
+                        if model.click.uniquePairAvailable { Button("Beide verbinden") { model.click.connectPair() } }
+                    }
+                }
+                DisclosureGroup("Controller und Ausgabe anpassen", isExpanded: $showAdvanced) {
+                    VStack(alignment: .leading, spacing: 18) {
                 Picker("Controller", selection: Binding(get: { model.source }, set: { model.selectSource($0) })) {
                     ForEach(ControllerSource.allCases) { source in Text(source.title).tag(source) }
                 }.pickerStyle(.segmented)
@@ -103,6 +119,10 @@ struct ShiftView: View {
                 Picker("Ausgabe", selection: Binding(get: { model.outputMode }, set: { model.selectOutput($0) })) {
                     ForEach(OutputMode.allCases) { mode in Text(mode.title).tag(mode) }
                 }
+                if model.outputMode == .bluetooth {
+                    Text("Shift emuliert einen OpenBikeControl-Bluetooth-Controller. Nur Apps mit diesem Protokoll können ihn verwenden; das ist keine Zwift- oder Trainer-Emulation. Für MyWhoosh im Einrichtungsassistenten die Netzwerk-Ausgabe verwenden. Bluetooth-Ausgabe ist noch nicht mit einer echten Trainings-App geprüft.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
                 if model.outputMode == .keyboard {
                     VStack(alignment: .leading, spacing: 10) {
                         Picker("Ziel-App", selection: $model.targetBundleID) {
@@ -132,6 +152,8 @@ struct ShiftView: View {
                 if let learning = model.learningText {
                     HStack { Text(learning); Spacer(); Button("Abbrechen") { model.cancelLearning() } }.font(.system(size: 12))
                 }
+                    }.padding(.top, 12)
+                }.font(.system(size: 12))
                 VStack(spacing: 0) {
                     status("gamecontroller", title: "Controller", value: model.controllerName ?? "Nicht verbunden", active: model.controllerName != nil)
                     Divider().opacity(0.5)
@@ -169,12 +191,25 @@ struct ShiftView: View {
                             .foregroundStyle(.secondary)
                     }.font(.system(size: 12)).transition(.opacity)
                 }
+                DisclosureGroup("Profil und Diagnose") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("Profilname", text: $model.profileName).textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button("Speichern") { model.saveProfile() }
+                            Button("Exportieren") { model.exportProfile() }
+                            Button("Importieren") { model.importProfile() }
+                        }
+                        Button("Verbindungsdiagnose speichern") { model.exportDiagnostics() }
+                        if let notice = model.notice { Text(notice).foregroundStyle(.secondary) }
+                        Text("Ein Profil überträgt Belegungen, keine Bluetooth-Geräte, Freigaben oder aktivierte Tastenausgabe.").foregroundStyle(.secondary)
+                    }.font(.system(size: 11)).padding(.top, 6)
+                }.font(.system(size: 11))
                 DisclosureGroup("Controller und Grenzen") {
-                    Text("Enthalten: Click V1 (unverschlüsselt), Click V2 (Aktivierung ggf. nötig), macOS-Gamepads mit sechs Belegungen sowie Tastatur-/HID-Remotes mit zwei anlernbaren Tasten. Ausgabe per MyWhoosh-Netzwerk oder als Tasten an eine ausgewählte Mac-App. Noch nicht enthalten: Zwift Play/Ride, verschlüsselter V1, Di2, SRAM AXS, CYCPLUS, Thinkrider, Wahoo-Bike, Elite, Wheeltop, reine Medien-Tasten, ANT+, Bluetooth-Geräteemulation oder direkte Trainer-Widerstandssteuerung. Tastatur-Modi dieser Geräte können ggf. über HID genutzt werden. Protokolltests vorhanden; echte Gerätekompatibilität muss je Modell geprüft werden.")
+                    Text("Enthalten: Click V1 (unverschlüsselt), Click V2 (Aktivierung ggf. nötig), macOS-Gamepads mit sechs Belegungen sowie Tastatur-/HID-Remotes mit zwei anlernbaren Tasten. Ausgabe per MyWhoosh-Netzwerk oder als Tasten an eine ausgewählte Mac-App. Zusätzlich enthalten: Zwift Ride mit älterem unverschlüsseltem Protokoll (Beta). Noch nicht enthalten: Zwift Play und verschlüsselter V1, Di2, SRAM AXS, CYCPLUS, Thinkrider, Wahoo-Bike, Elite, Wheeltop, reine Medien-Tasten, ANT+, Zwift-Geräteemulation oder direkte Trainer-Widerstandssteuerung. OpenBikeControl-Bluetooth-Ausgabe ist als Beta enthalten. Tastatur-Modi dieser Geräte können ggf. über HID genutzt werden. Protokolltests vorhanden; echte Gerätekompatibilität muss je Modell geprüft werden.")
                         .font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 5)
                 }.font(.system(size: 11))
                 HStack {
-                    Text("1.2.0 · Lokal · Controller-Beta")
+                    Text("1.3.0 · Lokal · Ohne Konto")
                     Spacer()
                     Link("Quellcode", destination: URL(string: "https://github.com/JoshuaForster02/Shift")!)
                 }.font(.system(size: 10)).foregroundStyle(.tertiary)

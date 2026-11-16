@@ -51,6 +51,8 @@ struct ClickButtons: Equatable {
             return ClickButtons(plus: (bitmap ?? 0) == 0, minus: (minus ?? 0) == 0)
         }
         guard let bitmap else { return nil }
+        if version == 3 { return ClickButtons(plus: bitmap & 0x200 == 0 || bitmap & 0x2000 == 0,
+                                              minus: bitmap & 0x400 == 0 || bitmap & 0x4000 == 0) }
         return ClickButtons(plus: bitmap & 0x1000 == 0, minus: bitmap & 0x100 == 0)
     }
 }

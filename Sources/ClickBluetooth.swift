@@ -6,6 +6,8 @@ struct ClickDevice: Identifiable {
     let name: String
     let status: String
     let connected: Bool
+    let side: PodSide
+    let ready: Bool
 }
 
 // All callbacks, timers and writes are confined to the main queue.
@@ -20,6 +22,7 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     private var scanTimer: Timer?
     private var powerTimer: Timer?
     private var found: [UUID: CBPeripheral] = [:]
+    private var sides: [UUID: PodSide] = [:]
     private var labels: [UUID: String] = [:]
     private var sessions: [UUID: Session] = [:]
     private var disconnecting: Set<UUID> = []
@@ -45,15 +48,30 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     var devices: [ClickDevice] {
         found.values.map { p in
             ClickDevice(id: p.identifier, name: labels[p.identifier] ?? p.name ?? "Zwift Click",
-                        status: sessions[p.identifier]?.status ?? "Gefunden", connected: sessions[p.identifier] != nil)
+                        status: sessions[p.identifier]?.status ?? "Gefunden", connected: sessions[p.identifier] != nil,
+                        side: sides[p.identifier] ?? .unknown, ready: isReady(p.identifier))
         }.sorted { $0.name == $1.name ? $0.id.uuidString < $1.id.uuidString : $0.name < $1.name }
     }
     var readyName: String? {
-        sessions.values.contains(where: { $0.active }) ? "Zwift Click V\(version)" : nil
+        sessions.values.contains(where: { $0.active }) ? (version == 3 ? "Zwift Ride" : "Zwift Click V\(version)") : nil
+    }
+    private func isReady(_ id: UUID) -> Bool {
+        guard let s = sessions[id] else { return false }
+        return s.peripheral.state == .connected && s.subscribed.contains(async) && s.subscribed.contains(tx)
+    }
+    var leftReady: Bool { sessions.keys.contains { sides[$0] == .left && isReady($0) } }
+    var rightReady: Bool { sessions.keys.contains { sides[$0] == .right && isReady($0) } }
+    var pairReady: Bool { leftReady && rightReady }
+    var uniquePairAvailable: Bool { PairSelection.uniquePair(devices.map { PodCandidate(id: $0.id, side: $0.side) }) != nil }
+    func connectPair() {
+        guard let ids = PairSelection.uniquePair(devices.map({ PodCandidate(id: $0.id, side: $0.side) })) else {
+            message = "Ein linker und ein rechter V2 müssen eindeutig gefunden sein. Sonst bitte einzeln auswählen."; onChange?(); return
+        }
+        for id in ids { connect(id) }
     }
     func selectVersion(_ version: Int) {
         stop(); found.removeAll(); self.version = version
-        message = "Click V\(version) direkt in Shift verbinden."; onChange?()
+        message = version == 3 ? "Zwift Ride: linken Controller aufwecken (unverschlüsselte Firmware)." : "Click V\(version) direkt in Shift verbinden."; onChange?()
     }
     func scan(version: Int = 2) {
         if self.version != version { selectVersion(version) }
@@ -70,12 +88,12 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     private func beginScan() {
         wantedScan = false; powerTimer?.invalidate(); scanTimer?.invalidate()
         found = found.filter { sessions[$0.key] != nil }
-        scanning = true; message = version == 1 ? "Click V1 aufwecken. Suche läuft …" : "Beide Click V2 aufwecken. Suche läuft …"
+        scanning = true; message = version == 1 ? "Click V1 aufwecken. Suche läuft …" : (version == 3 ? "Zwift Ride links aufwecken. Suche läuft …" : "Beide Click V2 aufwecken. Suche läuft …")
         central?.scanForPeripherals(withServices: nil)
-        scanTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in
+        scanTimer = Timer.scheduledTimer(withTimeInterval: 12, repeats: false) { [weak self] _ in
             guard let self else { return }
             self.central?.stopScan(); self.scanning = false
-            self.message = self.found.isEmpty ? "Kein Click gefunden. Controller wecken und Zwift schließen." : (self.version == 1 ? "Click V1 verbinden und eine Taste prüfen." : "Beide V2-Controller nacheinander verbinden.")
+            self.message = self.found.isEmpty ? "Kein Click gefunden. Controller wecken und Zwift schließen." : (self.version == 1 ? "Click V1 verbinden und eine Taste prüfen." : (self.version == 3 ? "Linken Ride-Controller verbinden und Tasten prüfen." : "Beide V2-Controller nacheinander verbinden."))
             self.onChange?()
         }
         onChange?()
@@ -83,7 +101,11 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     func connect(_ id: UUID) {
         guard sessions[id] == nil, let p = found[id] else { return }
         guard !disconnecting.contains(id) else { message = "Vorige Verbindung wird beendet. Bitte kurz erneut versuchen."; onChange?(); return }
-        guard sessions.count < (version == 1 ? 1 : 2) else { message = "Es sind bereits zwei Controller verbunden."; onChange?(); return }
+        guard sessions.count < (version == 2 ? 2 : 1) else { message = "Es sind bereits zwei Controller verbunden."; onChange?(); return }
+        if version == 2, let side = sides[id], side != .unknown,
+           sessions.keys.contains(where: { sides[$0] == side }) {
+            message = "Diese Seite ist schon verbunden. Bitte die andere Fernbedienung wählen."; onChange?(); return
+        }
         let s = Session(p); sessions[id] = s; p.delegate = self
         s.deadline = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self, weak s] _ in
             guard let self, let s, self.sessions[id] === s else { return }
@@ -118,9 +140,11 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         let manufacturer = Array(a[CBAdvertisementDataManufacturerDataKey] as? Data ?? Data())
         let pod = manufacturer.count >= 3 && manufacturer[0] == 0x4a && manufacturer[1] == 0x09 ? manufacturer[2] : 0
         let knownV2 = pod == 0x0a || pod == 0x0b
-        guard (version == 2 && knownV2) || (!knownV2 && name.lowercased().contains("zwift click")) else { return }
+        let matches = version == 3 ? pod == 8 : ((version == 2 && knownV2) || (!knownV2 && name.lowercased().contains("zwift click")))
+        guard matches else { return }
         found[p.identifier] = p
-        labels[p.identifier] = pod == 0x0a ? "Click V2 rechts (+)" : (pod == 0x0b ? "Click V2 links (−)" : name)
+        sides[p.identifier] = PodSide.fromManufacturer(a[CBAdvertisementDataManufacturerDataKey] as? Data ?? Data())
+        labels[p.identifier] = pod == 8 ? "Zwift Ride links · beide Griffe" : pod == 0x0a ? "Click V2 rechts (+)" : (pod == 0x0b ? "Click V2 links (−)" : name)
         onChange?()
     }
     func centralManager(_ central: CBCentralManager, didConnect p: CBPeripheral) {
@@ -151,7 +175,7 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
         s.subscribed.insert(c.uuid)
         guard s.subscribed.contains(async), s.subscribed.contains(tx), s.timer == nil else { return }
         s.deadline?.invalidate(); s.status = "Taste zum Prüfen drücken"
-        for (i, data) in (version == 1 ? [ClickProtocol.rideOn] : ClickProtocol.activation).enumerated() {
+        for (i, data) in (version == 2 ? ClickProtocol.activation : [ClickProtocol.rideOn]).enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) { [weak self, weak s] in
                 guard let self, let s, self.sessions[p.identifier] === s else { return }
                 self.enqueue(data, s)
@@ -191,7 +215,7 @@ final class ClickBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDele
     func peripheral(_ p: CBPeripheral, didUpdateValueFor c: CBCharacteristic, error: Error?) {
         guard let s = sessions[p.identifier], c.uuid == async || c.uuid == tx, error == nil, let data = c.value else { return }
         if ClickProtocol.needsActivation(data) {
-            s.status = version == 1 ? "Verschlüsseltes Protokoll: noch nicht unterstützt" : "Zwift-Aktivierung prüfen"; s.active = false
+            s.status = version != 2 ? "Verschlüsseltes Protokoll: noch nicht unterstützt" : "Zwift-Aktivierung prüfen"; s.active = false
             buttons = .released; onButtons?(.released)
             if version == 2 && !s.acked { s.acked = true; enqueue(ClickProtocol.acknowledgement, s) }
             onChange?(); return

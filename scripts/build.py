@@ -25,6 +25,7 @@ def run(*args):
     subprocess.run([str(arg) for arg in args], cwd=ROOT, check=True)
 
 for name, files in [
+    ("setup-tests", ["Sources/Wire.swift", "Sources/InputSettings.swift", "Sources/ClickProtocol.swift", "Sources/Setup.swift", "Tests/SetupTests.swift"]),
     ("input-tests", ["Sources/Wire.swift", "Sources/InputSettings.swift", "Tests/InputTests.swift"]),
     ("click-tests", ["Sources/Wire.swift", "Sources/ClickProtocol.swift", "Tests/ClickTests.swift"]),
     ("wire-tests", ["Sources/Wire.swift", "Tests/WireTests.swift"]),
@@ -55,7 +56,7 @@ run("xcrun", "lipo", "-create", BUILD / "Shift-arm64", BUILD / "Shift-x86_64", "
     "CFBundleName": "Shift", "CFBundleDisplayName": "Shift", "CFBundleExecutable": "Shift",
     "CFBundleIdentifier": "com.joshuaforster.shift", "CFBundlePackageType": "APPL",
     "CFBundleIconFile": "Shift.icns",
-    "CFBundleShortVersionString": "1.2.0", "CFBundleVersion": "3", "LSMinimumSystemVersion": "13.0",
+    "CFBundleShortVersionString": "1.3.0", "CFBundleVersion": "4", "LSMinimumSystemVersion": "13.0",
     "LSApplicationCategoryType": "public.app-category.healthcare-fitness", "NSHighResolutionCapable": True,
     "NSLocalNetworkUsageDescription": "Shift verbindet deinen Controller im lokalen Netzwerk mit MyWhoosh.",
     "NSBonjourServices": ["_openbikecontrol._tcp"],
@@ -63,12 +64,12 @@ run("xcrun", "lipo", "-create", BUILD / "Shift-arm64", BUILD / "Shift-x86_64", "
     "CFBundleURLTypes": [{"CFBundleURLName": "Shift", "CFBundleURLSchemes": ["shift"]}],
     "NSHumanReadableCopyright": "© 2026 Joshua Forster. OpenBikeControl protocol: MIT license.",
 }))
-for name in ["LICENSE", "THIRD_PARTY_NOTICES.md", "SUPPORT.md"]:
+for name in ["LICENSE", "THIRD_PARTY_NOTICES.md", "SUPPORT.md", "QUICKSTART-DE.md"]:
     shutil.copy2(ROOT / name, APP / "Contents/Resources" / name)
 run("/usr/bin/xattr", "-cr", APP)
 identity = os.environ.get("SHIFT_SIGN_IDENTITY", "-")
 run("/usr/bin/codesign", "--force", "--sign", identity, "--options", "runtime", "--timestamp=none", APP)
 run("/usr/bin/codesign", "--verify", "--strict", "--verbose=2", APP)
 run("xcrun", "lipo", "-archs", APP / "Contents/MacOS/Shift")
-run("/usr/bin/ditto", "-c", "-k", "--keepParent", APP, BUILD / "Shift-1.2.0-mac.zip")
-print("Ready:", BUILD / "Shift-1.2.0-mac.zip")
+run("/usr/bin/ditto", "-c", "-k", "--keepParent", APP, BUILD / "Shift-1.3.0-mac.zip")
+print("Ready:", BUILD / "Shift-1.3.0-mac.zip")

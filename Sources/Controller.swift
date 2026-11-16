@@ -1,11 +1,20 @@
 import AppKit
 import Combine
 import GameController
+import UniformTypeIdentifiers
 
 struct TrainingTarget: Identifiable { let id: String; let name: String }
 enum LearnTarget { case inputUp, inputDown, outputUp, outputDown }
 
 final class ShiftModel: ObservableObject {
+    @Published var showSetup = !UserDefaults.standard.bool(forKey: "setupSeen")
+    @Published private(set) var setupStep: SetupStep = .controller
+    @Published private(set) var buttonCheck = ButtonCheck()
+    @Published var profileName = "Mein Setup"
+    @Published var notice: String?
+    var setupReadiness: SetupReadiness {
+        SetupReadiness(pairConnected: click.pairReady, appConnected: networkConnected, buttonsTested: buttonCheck.complete)
+    }
     @Published var gamepadName: String?
     @Published private(set) var source: ControllerSource = .gamepad
     @Published var gamepadBinding = GamepadBinding(rawValue: UserDefaults.standard.string(forKey: "gamepadBinding") ?? "") ?? .dpad {
@@ -35,6 +44,7 @@ final class ShiftModel: ObservableObject {
     }
     let click = ClickBluetooth()
     let keyboard = KeyboardBridge()
+    let bluetoothOutput = BluetoothOutput()
     private let bridge = DeviceBridge()
     private var controller: GCController?
     private var latch = DirectionLatch()
@@ -45,24 +55,32 @@ final class ShiftModel: ObservableObject {
     private var started = false
     private var inputGeneration = 0
     private var pulseAction: ShiftAction?
+    private var lastBluetoothConnected = false
     private var learning: LearnTarget?
     var useClick: Bool { source.clickVersion != nil }
     var targetPID: pid_t? { NSRunningApplication.runningApplications(withBundleIdentifier: targetBundleID).first(where: { !$0.isTerminated })?.processIdentifier }
-    var connected: Bool { outputMode == .myWhoosh ? networkConnected : outputArmed && keyboard.trusted && targetPID != nil }
+    var connected: Bool {
+        switch outputMode { case .myWhoosh: return networkConnected; case .bluetooth: return bluetoothOutput.connected; case .keyboard: return outputArmed && keyboard.trusted && targetPID != nil }
+    }
     var controllerName: String? {
         if useClick { return click.readyName }
         if source == .keyboard { return keyboard.trusted ? "Tastatur / HID-Fernbedienung" : nil }
         return gamepadName
     }
-    var ready: Bool { controllerName != nil && connected }
-    var outputTitle: String { outputMode == .myWhoosh ? "MyWhoosh" : "Tastenausgabe" }
+    var ready: Bool { controllerName != nil && connected && (source != .clickV2 || (click.pairReady && buttonCheck.complete)) }
+    var outputTitle: String { outputMode == .myWhoosh ? "MyWhoosh" : (outputMode == .bluetooth ? "Bluetooth" : "Tastenausgabe") }
     var outputStatus: String {
         if outputMode == .myWhoosh { return connected ? appName ?? "Verbunden" : "Noch nicht verbunden" }
+        if outputMode == .bluetooth { return bluetoothOutput.message }
         if !keyboard.trusted { return "Bedienungshilfen erforderlich" }
         if targetPID == nil { return "Ziel-App zuerst starten" }
         return outputArmed ? "Aktiv · ausgewählte App" : "Deaktiviert"
     }
-    var headline: String { ready ? "Bereit zum Fahren" : (controllerName == nil ? "Controller verbinden" : "Ausgabe verbinden") }
+    var headline: String {
+        if source == .clickV2 && !click.pairReady { return "Beide Clicks verbinden" }
+        if source == .clickV2 && connected && !buttonCheck.complete { return "Plus und Minus prüfen" }
+        return ready ? "Bereit zum Fahren" : (controllerName == nil ? "Controller verbinden" : "Ausgabe verbinden")
+    }
     var subtitle: String {
         if useClick && controllerName == nil { return click.message }
         if source == .keyboard { return keyboard.trusted ? "Nur die zwei angelernten Tasten werden als Schaltbefehle ausgewertet." : "Für Fernbedienungen im Hintergrund: Bedienungshilfen für Shift erlauben." }
@@ -77,20 +95,36 @@ final class ShiftModel: ObservableObject {
         click.onChange = { [weak self] in
             guard let self else { return }
             if self.useClick && self.click.readyName == nil { self.release() }
+            if self.source == .clickV2 && !self.click.pairReady { self.buttonCheck.reset() }
             self.objectWillChange.send()
         }
-        click.onButtons = { [weak self] buttons in guard let self, self.useClick else { return }; self.input(x: buttons.direction) }
+        click.onButtons = { [weak self] buttons in
+            guard let self, self.useClick else { return }
+            if self.source == .clickV2 && self.click.pairReady && self.connected { self.buttonCheck.observe(buttons) }
+            self.input(x: buttons.direction)
+        }
         keyboard.onKey = { [weak self] code, flags, down in
             guard let self, self.source == .keyboard,
                   let direction = self.remoteKeys.update(code: code, modifiers: flags, down: down, upBinding: self.inputUp, downBinding: self.inputDown) else { return }
             self.input(x: direction)
         }
+        bluetoothOutput.onChange = { [weak self] in
+            guard let self else { return }
+            let connected = self.bluetoothOutput.connected
+            if self.outputMode == .bluetooth && connected != self.lastBluetoothConnected {
+                self.release()
+                if !connected { self.buttonCheck.reset() }
+            }
+            self.lastBluetoothConnected = connected
+            self.objectWillChange.send()
+        }
+        bluetoothOutput.onDelivery = { [weak self] action in self?.delivered(action) }
         keyboard.onLearn = { [weak self] binding in self?.finishLearning(binding) }
         bridge.onChange = { [weak self] in
             guard let self else { return }
             self.connectionText = self.bridge.message; self.networkReady = self.bridge.listening
             self.networkConnected = self.bridge.connected && self.bridge.canShift; self.appName = self.bridge.connectedName
-            if self.outputMode == .myWhoosh && !self.networkConnected { self.release() }
+            if self.outputMode == .myWhoosh && !self.networkConnected { self.release(); self.buttonCheck.reset() }
         }
         bridge.onDelivery = { [weak self] action in self?.delivered(action) }
         for name in [Notification.Name.GCControllerDidConnect, Notification.Name.GCControllerDidDisconnect] {
@@ -102,6 +136,9 @@ final class ShiftModel: ObservableObject {
             })
         }
         refreshTargets(); refreshController(); bridge.start()
+        if let data = UserDefaults.standard.data(forKey: "savedProfile"),
+           let saved = try? JSONDecoder().decode(ShiftProfile.self, from: data).validated() { applyProfile(saved) }
+        else if showSetup { configureVitus() }
     }
     func refreshTargets() {
         targets = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && $0.bundleIdentifier != Bundle.main.bundleIdentifier }
@@ -149,6 +186,7 @@ final class ShiftModel: ObservableObject {
     private func delivered(_ action: ShiftAction) { commands += 1; lastInput = action.title + " gesendet" }
     private func send(_ action: ShiftAction, pressed: Bool) {
         if outputMode == .myWhoosh { bridge.shift(action, pressed: pressed) }
+        else if outputMode == .bluetooth { bluetoothOutput.shift(action, pressed: pressed) }
         else if outputArmed && keyboard.send(action == .up ? outputUp : outputDown, down: pressed), pressed { delivered(action) }
     }
     private func input(x: Float) {
@@ -192,12 +230,15 @@ final class ShiftModel: ObservableObject {
         keyboard.releaseAll(); latch = DirectionLatch(); remoteKeys.reset()
     }
     func selectSource(_ next: ControllerSource) {
-        release(); cancelLearning(); click.stop(); source = next
+        release(); cancelLearning(); buttonCheck.reset(); click.stop(); source = next
         if let version = next.clickVersion { click.selectVersion(version) }
         if next == .keyboard { keyboard.start() } else { keyboard.stopMonitoring() }
     }
     func scanClick() { guard let version = source.clickVersion else { return }; click.scan(version: version) }
-    func selectOutput(_ next: OutputMode) { release(); disarmOutput(); outputMode = next }
+    func selectOutput(_ next: OutputMode) {
+        release(); disarmOutput(); bluetoothOutput.stop(); outputMode = next
+        if next == .bluetooth { bluetoothOutput.start() }
+    }
     func armOutput() {
         release()
         guard keyboard.trusted else { lastInput = "Bedienungshilfen für Shift erlauben"; return }
@@ -224,11 +265,77 @@ final class ShiftModel: ObservableObject {
         }
         cancelLearning(); if source != .keyboard { keyboard.stopMonitoring() }
     }
+    func configureVitus() {
+        disarmOutput(); selectOutput(.myWhoosh); selectSource(.clickV2)
+        reversed = false; holdToRepeat = true; profileName = "MyWhoosh · beide Click V2"
+        setupStep = .controller; buttonCheck.reset()
+    }
+    func beginSetup() { configureVitus(); showSetup = true }
+    func advanceSetup() {
+        guard setupReadiness.permits(setupStep) else { return }
+        if setupStep == .controller { setupStep = .app }
+        else if setupStep == .app { buttonCheck.reset(); setupStep = .test }
+        else { saveProfile(); showSetup = false; UserDefaults.standard.set(true, forKey: "setupSeen") }
+    }
+    func backSetup() {
+        if setupStep == .test { setupStep = .app }
+        else if setupStep == .app { setupStep = .controller }
+    }
+    func skipSetup() { showSetup = false; UserDefaults.standard.set(true, forKey: "setupSeen") }
+    func resetButtonTest() { buttonCheck.reset() }
+    private var currentProfile: ShiftProfile {
+        ShiftProfile(name: profileName, source: source, gamepad: gamepadBinding, reversed: reversed,
+                     holdToRepeat: holdToRepeat, inputUp: inputUp, inputDown: inputDown, outputUp: outputUp, outputDown: outputDown)
+    }
+    func saveProfile() {
+        do {
+            let valid = try currentProfile.validated(); let data = try JSONEncoder().encode(valid)
+            UserDefaults.standard.set(data, forKey: "savedProfile"); notice = "Profil gespeichert"
+        } catch { notice = "Profil prüfen: Name und zwei verschiedene Eingabetasten sind nötig." }
+    }
+    private func applyProfile(_ p: ShiftProfile) {
+        disarmOutput(); selectOutput(.myWhoosh); selectSource(p.source)
+        gamepadBinding = p.gamepad; reversed = p.reversed; holdToRepeat = p.holdToRepeat
+        inputUp = p.inputUp; inputDown = p.inputDown; outputUp = p.outputUp; outputDown = p.outputDown
+        profileName = p.name
+    }
+    func exportProfile() {
+        do {
+            let valid = try currentProfile.validated(); let panel = NSSavePanel()
+            panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Shift-Profil.json"
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(valid).write(to: url, options: .atomic); notice = "Profil exportiert · ohne Freigaben oder Gerätekennungen"
+        } catch { notice = "Profil konnte nicht exportiert werden." }
+    }
+    func importProfile() {
+        let panel = NSOpenPanel(); panel.allowedContentTypes = [.json]; panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            guard let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0, size <= 16384 else { throw ShiftProfile.ProfileError.invalid }
+            let data = try Data(contentsOf: url); guard data.count <= 16384 else { throw ShiftProfile.ProfileError.invalid }
+            let profile = try JSONDecoder().decode(ShiftProfile.self, from: data).validated()
+            applyProfile(profile); saveProfile(); notice = "Profil geladen. Bluetooth und Freigaben am eigenen Mac einrichten."
+        } catch { notice = "Keine gültige Shift-Profildatei. Bestehendes Profil bleibt erhalten." }
+    }
+    func exportDiagnostics() {
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]; panel.nameFieldStringValue = "Shift-Diagnose.json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let data: [String: Any] = ["version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown",
+                                 "system": ProcessInfo.processInfo.operatingSystemVersionString,
+                                 "controller": source.rawValue, "output": outputMode.rawValue,
+                                 "leftConnected": click.leftReady, "rightConnected": click.rightReady,
+                                 "plusTested": buttonCheck.plus, "minusTested": buttonCheck.minus,
+                                 "trainingAppConnected": networkConnected, "keyboardPermission": keyboard.trusted,
+                                 "networkStatus": connectionText]
+        do { try JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted, .sortedKeys]).write(to: url, options: .atomic); notice = "Diagnose gespeichert · ohne Geräte-IDs, Konten oder Trainingsdaten" }
+        catch { notice = "Diagnose konnte nicht gespeichert werden." }
+    }
     func reconnect() { release(); bridge.start(); refreshController(); refreshTargets() }
     func stop() {
         release(); clearHandlers(); observers.forEach(NotificationCenter.default.removeObserver); observers = []
         workspaceObservers.forEach(NSWorkspace.shared.notificationCenter.removeObserver); workspaceObservers = []
-        click.stop(); keyboard.stop(); bridge.stop(); started = false
+        click.stop(); bluetoothOutput.stop(); keyboard.stop(); bridge.stop(); started = false
     }
     func openMyWhoosh() {
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.whoosh.whooshgame") {
