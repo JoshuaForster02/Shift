@@ -9,7 +9,7 @@ A small native macOS controller bridge for MyWhoosh. Apple Silicon and Intel, ma
 3. Choose **Shift** in the training app’s controller pairing screen and enable MyShift in MyWhoosh.
 4. D-pad right shifts up; left shifts down. Swap direction or disable hold-to-repeat in Shift.
 
-The controller and training app communicate over the local network. Shift does not replace a smart trainer. Only OS-supported gamepads are supported; keyboard-mode Anki remotes and proprietary Zwift controller pairing are not included.
+The controller and training app communicate over the local network. Shift does not replace a smart trainer. Supports OS gamepads and direct Zwift Click V2 pairing (beta, firmware-dependent activation may be required). Keyboard-mode Anki remotes are not supported.
 
 ## Build and test
 
@@ -30,3 +30,22 @@ No accounts, cloud sync, analytics or personal workout data. Only a random devic
 ## License
 
 MIT. Protocol attribution: THIRD_PARTY_NOTICES.md.
+
+## Click V2 — ab Shift 1.1 (Beta)
+In Shift „Zwift Click V2“ wählen, „V2 suchen“ drücken und beide Controller
+nacheinander verbinden. Bluetooth für Shift erlauben. Anschließend Shift
+in MyWhoosh als Controller auswählen. +/−, invertierte Richtung und
+Haltewiederholung verwenden dieselbe OpenBikeControl-Verbindung wie Gamepads.
+„Tasten kommen an“ bestätigt erst ein echtes, gültiges Tastenpaket.
+
+Die beiden V2-Pods können Tasten spiegeln; Shift verarbeitet diese einmal.
+Der linke V2 benötigt je nach Firmware eine zeitlich begrenzte Freigabe
+durch Zwift. Beide Controller dort aktivieren, Zwift schließen, in Shift
+neu verbinden. Shift erneuert die Freigabe nicht automatisch und sammelt
+keine Zwift-Zugangsdaten. Noch kein physischer V2-/Fahrtest durchgeführt.
+Die App bleibt Apple-Development-signiert und nicht notarisiert.
+
+Protokollquelle: thomaschampagne/zwiftboard, MIT, Revision
+ee4b1f2156d316398f71aeb09b67282901456b8e. Vollständige Attribution in
+THIRD_PARTY_NOTICES.md. Kein Code der nichtkommerziell lizenzierten
+BikeControl-App wurde übernommen.
