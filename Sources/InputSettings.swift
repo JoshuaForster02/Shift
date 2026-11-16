@@ -1,14 +1,14 @@
 import Foundation
 
-enum ControllerSource: String, CaseIterable, Identifiable {
-    case gamepad, clickV1, clickV2, keyboard
+enum ControllerSource: String, CaseIterable, Identifiable, Codable {
+    case gamepad, clickV1, clickV2, ride, keyboard
     var id: String { rawValue }
     var title: String {
-        switch self { case .gamepad: return "Gamepad"; case .clickV1: return "Click V1"; case .clickV2: return "Click V2"; case .keyboard: return "Tastatur" }
+        switch self { case .gamepad: return "Gamepad"; case .clickV1: return "Click V1"; case .clickV2: return "Click V2"; case .ride: return "Ride"; case .keyboard: return "Tastatur" }
     }
-    var clickVersion: Int? { self == .clickV1 ? 1 : (self == .clickV2 ? 2 : nil) }
+    var clickVersion: Int? { self == .clickV1 ? 1 : (self == .clickV2 ? 2 : (self == .ride ? 3 : nil)) }
 }
-enum GamepadBinding: String, CaseIterable, Identifiable {
+enum GamepadBinding: String, CaseIterable, Identifiable, Codable {
     case dpad, shoulders, triggers, face, leftStick, rightStick
     var id: String { rawValue }
     var title: String {
@@ -23,9 +23,11 @@ enum GamepadBinding: String, CaseIterable, Identifiable {
     }
 }
 enum OutputMode: String, CaseIterable, Identifiable {
-    case myWhoosh, keyboard
+    case myWhoosh, bluetooth, keyboard
     var id: String { rawValue }
-    var title: String { self == .myWhoosh ? "MyWhoosh · Netzwerk" : "Tastatur · ausgewählte App" }
+    var title: String {
+        switch self { case .myWhoosh: return "MyWhoosh · Netzwerk"; case .bluetooth: return "Bluetooth · OpenBikeControl"; case .keyboard: return "Tastatur · ausgewählte App" }
+    }
 }
 struct KeyBinding: Codable, Equatable {
     var code: UInt16

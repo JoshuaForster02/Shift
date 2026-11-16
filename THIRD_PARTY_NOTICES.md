@@ -54,3 +54,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+## Zwift Ride protocol facts
+Independent adapter based on the published protocol description by Makinolo:
+https://www.makinolo.com/blog/2024/07/26/zwift-ride-protocol/
+No BikeControl application code is included.

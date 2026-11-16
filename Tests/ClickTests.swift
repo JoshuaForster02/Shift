@@ -36,6 +36,13 @@ import Foundation
         for b: [UInt8] in [[0x37], [0x37,8,128], [0x37,8,2,16,1], [0x37,8,1,8,0], [0x37,8,1,18,20,0], [0x23,8,0]] {
             check(ClickButtons.decode(Data(b), version: 1) == nil, "Invalid V1 ignored")
         }
-        print("\(count) Click V2 checks passed")
+        check(ClickButtons.decode(frame(.max), version: 3) == .released, "Ride release")
+        check(ClickButtons.decode(frame(0xfffffdff), version: 3)?.plus == true, "Ride left up")
+        check(ClickButtons.decode(frame(0xffffdfff), version: 3)?.plus == true, "Ride right up")
+        check(ClickButtons.decode(frame(0xfffffbff), version: 3)?.minus == true, "Ride left down")
+        check(ClickButtons.decode(frame(0xffffbfff), version: 3)?.minus == true, "Ride right down")
+        check(ClickButtons.decode(frame(0xffffefff), version: 3) == .released, "Click V2 plus is not a Ride shift")
+        check(ClickButtons.decode(Data([0x23,8,0xfe,0xff,0xff,0xff,0x0f,0x12,0x00]), version: 3) == .released, "Ride steering is not a gear")
+        print("\(count) Click/Ride checks passed")
     }
 }

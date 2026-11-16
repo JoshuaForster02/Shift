@@ -60,3 +60,17 @@ Beim Lernen wird die Ausgabe deaktiviert. Quellwechsel, Programmende und
 Trennung geben gehaltene Tasten frei; eigene Ausgaben werden nicht erneut
 als Eingabe verarbeitet. Keine Texteingaben oder Verlaufsspeicherung.
 Vollständige Kompatibilitätsmatrix: [SUPPORT.md](SUPPORT.md).
+
+## Shift 1.3 — MyWhoosh und beide Click V2
+Beim ersten Start führt der Assistent durch Paarverbindung, MyWhoosh und
+separaten Plus-/Minus-Test. [Deutschsprachige Startanleitung](QUICKSTART-DE.md).
+Lokale Profile lassen sich speichern und ohne Geräte-IDs oder Berechtigungen
+teilen. Das Profil Profiles/MyWhoosh-Click-V2.json passt zu diesem Setup.
+
+Zusätzlich: älteres unverschlüsseltes Zwift Ride (linker BLE-Anker) und
+optionale OpenBikeControl-BLE-Geräteemulation. Das ist keine Zwift-/FTMS-
+Emulation; die Empfänger-App muss OpenBikeControl über BLE unterstützen.
+Ride-/BLE-Hardwaretests stehen noch aus. [SUPPORT.md](SUPPORT.md) ist maßgeblich.
+
+Protokollreferenzen: https://www.makinolo.com/blog/2024/07/26/zwift-ride-protocol/
+und https://github.com/OpenBikeControl/openbikecontrol-protocol/blob/main/BLE.md.

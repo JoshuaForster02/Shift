@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "name": "MyWhoosh · beide Click V2",
+  "source": "clickV2",
+  "gamepad": "dpad",
+  "reversed": false,
+  "holdToRepeat": true,
+  "inputUp": {
+    "code": 124,
+    "modifiers": 0
+  },
+  "inputDown": {
+    "code": 123,
+    "modifiers": 0
+  },
+  "outputUp": {
+    "code": 124,
+    "modifiers": 0
+  },
+  "outputDown": {
+    "code": 123,
+    "modifiers": 0
+  }
+}
