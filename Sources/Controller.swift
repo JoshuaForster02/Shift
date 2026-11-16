@@ -3,7 +3,10 @@ import Combine
 import GameController
 
 final class ShiftModel: ObservableObject {
-    @Published var controllerName: String?
+    @Published var gamepadName: String?
+    @Published var useClick = false
+    let click = ClickBluetooth()
+    var controllerName: String? { useClick ? click.readyName : gamepadName }
     @Published var connectionText = "Verbindung wird vorbereitet …"
     @Published var appName: String?
     @Published var networkReady = false
@@ -28,6 +31,8 @@ final class ShiftModel: ObservableObject {
     var ready: Bool { controllerName != nil && connected }
     var headline: String { ready ? "Bereit zum Fahren" : (controllerName == nil ? "Controller verbinden" : "MyWhoosh verbinden") }
     var subtitle: String {
+        if ready && useClick { return reversed ? "Click V2: + schaltet runter, − schaltet hoch." : "Click V2: + schaltet hoch, − schaltet runter." }
+        if useClick && controllerName == nil { return click.message }
         if ready { return reversed ? "Steuerkreuz links schaltet hoch. Rechts schaltet runter." : "Steuerkreuz rechts schaltet hoch. Links schaltet runter." }
         if controllerName == nil { return "Shanwan oder einen anderen Gamepad-Controller per Bluetooth mit dem Mac verbinden." }
         return networkReady ? "In MyWhoosh bei den Controllern „Shift“ auswählen." : connectionText
@@ -37,6 +42,15 @@ final class ShiftModel: ObservableObject {
         guard !started else { return }
         started = true
         GCController.shouldMonitorBackgroundEvents = true
+        click.onChange = { [weak self] in
+            guard let self else { return }
+            if self.useClick && self.click.readyName == nil { self.release() }
+            self.objectWillChange.send()
+        }
+        click.onButtons = { [weak self] buttons in
+            guard let self, self.useClick else { return }
+            self.input(x: buttons.direction)
+        }
         bridge.onChange = { [weak self] in
             guard let self else { return }
             self.connectionText = self.bridge.message
@@ -64,9 +78,9 @@ final class ShiftModel: ObservableObject {
         release()
         controller?.extendedGamepad?.dpad.valueChangedHandler = nil
         controller = next
-        controllerName = next?.vendorName ?? (next == nil ? nil : "Gamepad")
+        gamepadName = next?.vendorName ?? (next == nil ? nil : "Gamepad")
         next?.handlerQueue = .main
-        next?.extendedGamepad?.dpad.valueChangedHandler = { [weak self] _, x, _ in self?.input(x: x) }
+        next?.extendedGamepad?.dpad.valueChangedHandler = { [weak self] _, x, _ in guard let self, !self.useClick else { return }; self.input(x: x) }
     }
 
     private func input(x: Float) {
@@ -118,12 +132,18 @@ final class ShiftModel: ObservableObject {
         if let held = latch.held { bridge.shift(held, pressed: false) }
         latch = DirectionLatch()
     }
+    func selectClick(_ enabled: Bool) {
+        release(); useClick = enabled
+        if !enabled { click.stop() }
+    }
+    func scanClick() { selectClick(true); click.scan() }
     func reconnect() { release(); bridge.start(); refreshController() }
     func stop() {
         release()
         controller?.extendedGamepad?.dpad.valueChangedHandler = nil
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
+        click.stop()
         bridge.stop()
         started = false
     }
