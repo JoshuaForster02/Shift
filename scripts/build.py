@@ -56,7 +56,7 @@ run("xcrun", "lipo", "-create", BUILD / "Shift-arm64", BUILD / "Shift-x86_64", "
     "CFBundleName": "Shift", "CFBundleDisplayName": "Shift", "CFBundleExecutable": "Shift",
     "CFBundleIdentifier": "com.joshuaforster.shift", "CFBundlePackageType": "APPL",
     "CFBundleIconFile": "Shift.icns",
-    "CFBundleShortVersionString": "1.3.0", "CFBundleVersion": "4", "LSMinimumSystemVersion": "13.0",
+    "CFBundleShortVersionString": "1.4.0", "CFBundleVersion": "5", "LSMinimumSystemVersion": "13.0",
     "LSApplicationCategoryType": "public.app-category.healthcare-fitness", "NSHighResolutionCapable": True,
     "NSLocalNetworkUsageDescription": "Shift verbindet deinen Controller im lokalen Netzwerk mit MyWhoosh.",
     "NSBonjourServices": ["_openbikecontrol._tcp"],
@@ -71,5 +71,5 @@ identity = os.environ.get("SHIFT_SIGN_IDENTITY", "-")
 run("/usr/bin/codesign", "--force", "--sign", identity, "--options", "runtime", "--timestamp=none", APP)
 run("/usr/bin/codesign", "--verify", "--strict", "--verbose=2", APP)
 run("xcrun", "lipo", "-archs", APP / "Contents/MacOS/Shift")
-run("/usr/bin/ditto", "-c", "-k", "--keepParent", APP, BUILD / "Shift-1.3.0-mac.zip")
-print("Ready:", BUILD / "Shift-1.3.0-mac.zip")
+run("/usr/bin/ditto", "-c", "-k", "--keepParent", APP, BUILD / "Shift-1.4.0-mac.zip")
+print("Ready:", BUILD / "Shift-1.4.0-mac.zip")

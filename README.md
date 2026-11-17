@@ -74,3 +74,8 @@ Ride-/BLE-Hardwaretests stehen noch aus. [SUPPORT.md](SUPPORT.md) ist maßgeblic
 
 Protokollreferenzen: https://www.makinolo.com/blog/2024/07/26/zwift-ride-protocol/
 und https://github.com/OpenBikeControl/openbikecontrol-protocol/blob/main/BLE.md.
+
+## Shift 1.4
+Adaptive Orbit- und Eingabeanimationen mit Systemvorgabe, voller oder reduzierter Bewegung. Animationen pausieren bei inaktiver App. Behebt die wiederholte MyWhoosh-Trennung durch dessen Nullbyte nach App Information. 99 Prüfungen plus TCP-Integration bestanden.
+
+[Alle Apps und Downloads](https://joshuaforster.de/apps/)

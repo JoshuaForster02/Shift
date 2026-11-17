@@ -41,6 +41,10 @@ struct PeerParser {
         var peers: [PeerInfo] = []
         while !bytes.isEmpty {
             switch bytes[0] {
+            case 0x00:
+                // MyWhoosh sends a NUL padding/keepalive byte after App Information.
+                // It may arrive alone or coalesced with the following TCP frame.
+                bytes.removeFirst()
             case 0x03:
                 guard bytes.count >= 4 else { return peers }
                 bytes.removeFirst(4) // Optional haptic message; no controller rumble required.

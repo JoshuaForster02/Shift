@@ -33,7 +33,7 @@ final class TCPProbe {
                     if case .ready = state {
                         let name = Array("mywhoosh".utf8)
                         let frame = Data([4, 1, UInt8(name.count)] + name + [1, 49, 2, 1, 2])
-                        connection.send(content: frame, completion: .contentProcessed { error in precondition(error == nil) })
+                        connection.send(content: frame + Data([0]) + frame, completion: .contentProcessed { error in precondition(error == nil) })
                         self.receive(connection)
                     }
                 }
@@ -52,6 +52,6 @@ final class TCPProbe {
         bridge.onChange = {}
         client?.cancel()
         bridge.stop()
-        print("TCP integration passed: app identity, capabilities, status and shift delivery")
+        print("TCP integration passed: MyWhoosh NUL padding, app identity, capabilities, status and shift delivery")
     }
 }

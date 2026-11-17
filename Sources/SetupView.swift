@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct SetupView: View {
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @AppStorage("futuristicMotion") private var motionMode = "system"
+    private var reduceMotion: Bool { motionMode == "off" || (motionMode != "on" && systemReduceMotion) }
     @ObservedObject var model: ShiftModel
     private let accent = Color(red: 0.32, green: 0.65, blue: 1)
     var body: some View {
@@ -21,9 +24,14 @@ struct SetupView: View {
                 }
                 Text(title).font(.system(size: 31, weight: .semibold, design: .rounded)).tracking(-0.8)
                 Text(subtitle).font(.system(size: 13)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                if model.setupStep == .controller { controllers }
-                else if model.setupStep == .app { appConnection }
-                else { buttonTest }
+                Group {
+                    if model.setupStep == .controller { controllers }
+                    else if model.setupStep == .app { appConnection }
+                    else { buttonTest }
+                }
+                .id(model.setupStep)
+                .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: 18)), removal: .opacity.combined(with: .offset(y: -8))))
+                .animation(reduceMotion ? nil : .spring(response: 0.48, dampingFraction: 0.85), value: model.setupStep)
                 Spacer(minLength: 6)
                 HStack {
                     if model.setupStep != .controller { Button("Zurück") { model.backSetup() } }
@@ -35,13 +43,18 @@ struct SetupView: View {
                 HStack {
                     Button("Andere Controller / manuell einrichten") { model.skipSetup() }
                     Spacer()
+                    Menu("Animationen") {
+                        Picker("Animationen", selection: $motionMode) {
+                            Text("Systemvorgabe").tag("system"); Text("Voll").tag("on"); Text("Reduziert").tag("off")
+                        }
+                    }.menuStyle(.borderlessButton).frame(width: 84)
                     Link("Hilfe", destination: URL(string: "https://shift-kohl-chi.vercel.app/#einrichtung")!)
                 }.font(.system(size: 11)).buttonStyle(.borderless).foregroundStyle(.secondary)
                 Text("MyWhoosh · beide Zwift Click V2 · ohne Shift-Konto")
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
             }.padding(.horizontal, 30).padding(.bottom, 24)
         }
-        .background(Color(red: 0.065, green: 0.065, blue: 0.075))
+        .background { CircuitBackdrop(emphasis: 0.8) }
         .tint(accent)
     }
     private var title: String {
@@ -118,7 +131,7 @@ struct SetupView: View {
     }
     private func checkRow(_ title: String, detail: String, done: Bool) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: done ? "checkmark.circle.fill" : "circle").foregroundStyle(done ? accent : .gray)
+            SignalGlyph(symbol: done ? "checkmark" : "circle.dotted", active: done, pulse: done ? 1 : 0).scaleEffect(0.65).frame(width: 38, height: 38)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.system(size: 14, weight: .semibold))
                 Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
