@@ -44,6 +44,7 @@ struct ShiftView: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @AppStorage("futuristicMotion") private var motionMode = "system"
     private var reduceMotion: Bool { motionMode == "off" || (motionMode != "on" && systemReduceMotion) }
+    @State private var showTrainer = false
     @State private var showHelp = false
     @State private var showAdvanced = false
     private let accent = Color(red: 0.32, green: 0.65, blue: 1)
@@ -54,6 +55,7 @@ struct ShiftView: View {
                     Image(systemName: "bicycle").font(.system(size: 20, weight: .medium)).foregroundStyle(accent)
                     Text("Shift").font(.system(size: 17, weight: .semibold))
                     Spacer()
+                    Button("Trainer") { showTrainer = true }.font(.system(size:11)).buttonStyle(.borderless)
                     Button("Einrichten") { model.beginSetup() }.font(.system(size: 11)).buttonStyle(.borderless)
                     Text("MAC").font(.system(size: 10, weight: .medium, design: .monospaced)).foregroundStyle(.secondary)
                 }.padding(.top, 14)
@@ -215,13 +217,14 @@ struct ShiftView: View {
                         .font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 5)
                 }.font(.system(size: 11))
                 HStack {
-                    Text("1.4.0 · Lokal · Ohne Konto")
+                    Text("1.5.0 · Lokal · Ohne Konto")
                     Spacer()
                     Link("Quellcode", destination: URL(string: "https://github.com/JoshuaForster02/Shift")!)
                 }.font(.system(size: 10)).foregroundStyle(.tertiary)
             }.padding(.horizontal, 30).padding(.bottom, 24)
         }
         .background { CircuitBackdrop(emphasis: model.ready ? 1 : 0.65) }
+        .sheet(isPresented:$showTrainer){VirtualTrainerView()}
         .tint(accent)
         .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.8), value: model.ready)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: showHelp)
