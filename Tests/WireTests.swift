@@ -33,6 +33,17 @@ import Foundation
         var combined = PeerParser()
         let combinedInfo = try combined.feed(Data([3, 1, 0, 0]) + frame + frame)
         check(combinedInfo.count == 2, "Coalesced frames with optional haptics")
+        var nulParser = PeerParser()
+        let beforeNul = try nulParser.feed(frame)
+        check(beforeNul.count == 1, "MyWhoosh App Information is accepted")
+        let paddingOnly = try nulParser.feed(Data([0]))
+        check(paddingOnly.isEmpty, "Standalone MyWhoosh NUL does not disconnect")
+        let afterNul = try nulParser.feed(Data([0, 0]) + frame + Data([0]) + frame)
+        check(afterNul.count == 2, "NUL padding and coalesced frames preserve stream alignment")
+        var fragmentedNul = PeerParser()
+        var recovered: [PeerInfo] = []
+        for byte in Data([0]) + frame + Data([0]) { recovered += try fragmentedNul.feed(Data([byte])) }
+        check(recovered.count == 1, "Fragmented MyWhoosh stream tolerates NUL padding")
         for bad in [Data([4, 2, 0]), Data([4, 1, 33]), Data([0xFF]), Data(repeating: 1, count: 4097)] {
             do { var parser = PeerParser(); _ = try parser.feed(bad); preconditionFailure("Malformed input accepted") }
             catch { count += 1 }
