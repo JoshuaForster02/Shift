@@ -41,6 +41,9 @@ struct ShiftApp: App {
 
 struct ShiftView: View {
     @ObservedObject var model: ShiftModel
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @AppStorage("futuristicMotion") private var motionMode = "system"
+    private var reduceMotion: Bool { motionMode == "off" || (motionMode != "on" && systemReduceMotion) }
     @State private var showHelp = false
     @State private var showAdvanced = false
     private let accent = Color(red: 0.32, green: 0.65, blue: 1)
@@ -193,6 +196,9 @@ struct ShiftView: View {
                 }
                 DisclosureGroup("Profil und Diagnose") {
                     VStack(alignment: .leading, spacing: 10) {
+                        Picker("Animationen", selection: $motionMode) {
+                            Text("Systemvorgabe").tag("system"); Text("Voll").tag("on"); Text("Reduziert").tag("off")
+                        }
                         TextField("Profilname", text: $model.profileName).textFieldStyle(.roundedBorder)
                         HStack {
                             Button("Speichern") { model.saveProfile() }
@@ -209,16 +215,16 @@ struct ShiftView: View {
                         .font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 5)
                 }.font(.system(size: 11))
                 HStack {
-                    Text("1.3.0 · Lokal · Ohne Konto")
+                    Text("1.4.0 · Lokal · Ohne Konto")
                     Spacer()
                     Link("Quellcode", destination: URL(string: "https://github.com/JoshuaForster02/Shift")!)
                 }.font(.system(size: 10)).foregroundStyle(.tertiary)
             }.padding(.horizontal, 30).padding(.bottom, 24)
         }
-        .background(Color(red: 0.065, green: 0.065, blue: 0.075))
+        .background { CircuitBackdrop(emphasis: model.ready ? 1 : 0.65) }
         .tint(accent)
-        .animation(.easeInOut(duration: 0.18), value: model.ready)
-        .animation(.easeInOut(duration: 0.18), value: showHelp)
+        .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.8), value: model.ready)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: showHelp)
     }
     private func status(_ symbol: String, title: String, value: String, active: Bool) -> some View {
         HStack(spacing: 12) {
@@ -231,8 +237,7 @@ struct ShiftView: View {
     private func direction(_ action: ShiftAction, arrow: String, key: String) -> some View {
         Button { model.pulse(action) } label: {
             VStack(spacing: 10) {
-                Image(systemName: arrow).font(.system(size: 28, weight: .light))
-                    .foregroundStyle(model.lastDirection == action ? accent : .white)
+                SignalGlyph(symbol: arrow, active: model.lastDirection == action, pulse: model.lastDirection == action ? model.inputSequence : 0)
                 Text(action == .up ? "Hoch" : "Runter").font(.system(size: 14, weight: .semibold))
                 Text(model.useClick ? (action == .up ? (model.reversed ? "Click −" : "Click +") : (model.reversed ? "Click +" : "Click −")) : (model.source == .keyboard ? (action == .up ? model.inputUp.title : model.inputDown.title) : model.gamepadBinding.title)).font(.system(size: 10)).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity).contentShape(Rectangle())

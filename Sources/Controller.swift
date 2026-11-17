@@ -36,6 +36,7 @@ final class ShiftModel: ObservableObject {
     @Published var lastInput = "Noch keine Eingabe"
     @Published var lastDirection: ShiftAction?
     @Published var commands = 0
+    @Published var inputSequence = 0
     @Published var reversed = UserDefaults.standard.bool(forKey: "reversed") {
         didSet { release(); UserDefaults.standard.set(reversed, forKey: "reversed") }
     }
@@ -195,7 +196,7 @@ final class ShiftModel: ObservableObject {
         inputGeneration += 1; repeatTimer?.invalidate(); repeatTimer = nil
         for (action, pressed) in changes {
             send(action, pressed: pressed)
-            if pressed { lastDirection = action; if !connected { lastInput = action.title + " erkannt · Ausgabe noch nicht verbunden" } }
+            if pressed { inputSequence += 1; lastDirection = action; if !connected { lastInput = action.title + " erkannt · Ausgabe noch nicht verbunden" } }
         }
         if let action = latch.held, holdToRepeat, connected {
             repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
@@ -211,7 +212,7 @@ final class ShiftModel: ObservableObject {
     func pulse(_ action: ShiftAction) {
         guard connected else { lastInput = "Zuerst die Ausgabe verbinden"; return }
         release(); let generation = inputGeneration
-        send(action, pressed: true); pulseAction = action; lastDirection = action
+        inputSequence += 1; send(action, pressed: true); pulseAction = action; lastDirection = action
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             guard let self, self.inputGeneration == generation else { return }; self.send(action, pressed: false); self.pulseAction = nil
         }
