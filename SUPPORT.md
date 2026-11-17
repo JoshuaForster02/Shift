@@ -1,4 +1,4 @@
-# Shift 1.3 – Unterstützung
+# Shift 1.4 – Unterstützung
 
 | Eingabe / Ausgabe | Stand |
 |---|---|
@@ -19,7 +19,10 @@
 Tastenausgabe erzeugt allein keine virtuelle Schaltung; die Ziel-App muss die gewählten Tastaturbefehle unterstützen. Keine vollständige BikeControl-Funktionsgleichheit. Es wurde kein App-Code aus der nichtkommerziell lizenzierten BikeControl-Version übernommen.
 
 ## Tests und Hardware
-95 reine Protokoll-/Mapping-/Setup-Prüfungen und echte TCP-Loopbackintegration. Universal-Build ARM64/Intel. Die V1-/V2-Verbindungswege und die unterschiedlichen Gamepad-Belegungen wurden noch nicht mit allen echten Geräten gefahren. HID-Hintergrundeingabe und Ausgabe benötigen eine vom Nutzer selbst erteilte macOS-Freigabe; die Freigabe wird nicht automatisch gesetzt.
+99 reine Protokoll-/Mapping-/Setup-Prüfungen und echte TCP-Loopbackintegration. Universal-Build ARM64/Intel. Die V1-/V2-Verbindungswege und die unterschiedlichen Gamepad-Belegungen wurden noch nicht mit allen echten Geräten gefahren. HID-Hintergrundeingabe und Ausgabe benötigen eine vom Nutzer selbst erteilte macOS-Freigabe; die Freigabe wird nicht automatisch gesetzt.
 
 ## Einrichtung und Weitergabe
 Einrichtungsassistent für MyWhoosh plus beide Click V2. Links/rechts-Verbindung wird getrennt geprüft, Plus/Minus als tatsächliche Eingaben geprüft. Bei mehreren möglichen Paaren erfolgt keine automatische Auswahl. Profile sind lokal, validiert und ohne Freigaben/Gerätekennungen exportierbar. Diagnoseexport enthält keine Konten, Geräte-IDs oder Trainingsdaten. Der Assistent bestätigt Eingabe und Verbindung, nicht das tatsächliche Schalten im laufenden Spiel.
+
+## MyWhoosh-Verbindung in 1.4
+MyWhoosh sendet nach der App-Information ein Nullbyte. Shift akzeptiert dieses Padding auch bei getrennten und zusammengefassten TCP-Lesevorgängen, statt die Verbindung zu trennen. Die Folge wurde am echten MyWhoosh-Client beobachtet und durch Parser- sowie TCP-Regressionstests abgesichert.
