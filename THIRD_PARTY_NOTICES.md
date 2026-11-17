@@ -60,3 +60,6 @@ SOFTWARE.
 Independent adapter based on the published protocol description by Makinolo:
 https://www.makinolo.com/blog/2024/07/26/zwift-ride-protocol/
 No BikeControl application code is included.
+
+## Direct Connect wire format
+The virtual test trainer is an original implementation of BLE data transported over TCP. Protocol research references: https://support.wahoofitness.com/hc/en-us/articles/360018905100 and the independently researched format at https://github.com/elfrances/wahoo-fitness-tnp . No implementation code or specification text from that project is bundled. Bluetooth SIG UUIDs and FTMS/Cycling Power field formats are interoperability identifiers and wire formats.

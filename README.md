@@ -79,3 +79,12 @@ und https://github.com/OpenBikeControl/openbikecontrol-protocol/blob/main/BLE.md
 Adaptive Orbit- und Eingabeanimationen mit Systemvorgabe, voller oder reduzierter Bewegung. Animationen pausieren bei inaktiver App. Behebt die wiederholte MyWhoosh-Trennung durch dessen Nullbyte nach App Information. 99 Prüfungen plus TCP-Integration bestanden.
 
 [Alle Apps und Downloads](https://joshuaforster.de/apps/)
+
+## Shift 1.5 — Test-Trainer ohne Hardware
+Oben auf „Trainer“ klicken, Watt/Trittfrequenz/Tempo/Puls einstellen und „LAN-Trainer starten“. In MyWhoosh LAN einschalten und den angezeigten Shift-Trainer als Leistung, Trittfrequenz und steuerbaren Trainer auswählen. Das Testgerät wurde in MyWhoosh auf demselben Mac mit aktiver Leistungs-, Kadenz-, Puls- und Steuerungsverbindung geprüft.
+
+Leistung 0–30.000 W, Kadenz 0–300 U/min, FTMS-Tempo 0–655,35 km/h. MyWhoosh berechnet seine Fahrgeschwindigkeit selbst; für hohes Tempo die Leistung erhöhen. Optional ERG-Ziele der App übernehmen oder Signalausfall testen. Start ist ausdrücklich erforderlich, beim Beenden von Shift wird der Dienst abgeschaltet. Ein offenes Testfenster darf geschlossen werden, während der Trainer läuft.
+
+AEON World bietet unter „Virtueller Trainer“ eine eigene lokale Simulation mit frei gesetztem Warp-Tempo bis 3.000 km/h. Diese Testfahrten vergeben keine XP, speichern keine Bestzeiten und senden keine Position an Mitfahrer.
+
+Prüfungen: 123 Protokoll-, Setup- und Eingabetests plus zwei echte TCP-Integrationen (OpenBikeControl und Trainer).

@@ -336,7 +336,7 @@ final class ShiftModel: ObservableObject {
     func stop() {
         release(); clearHandlers(); observers.forEach(NotificationCenter.default.removeObserver); observers = []
         workspaceObservers.forEach(NSWorkspace.shared.notificationCenter.removeObserver); workspaceObservers = []
-        click.stop(); bluetoothOutput.stop(); keyboard.stop(); bridge.stop(); started = false
+        VirtualTrainerServer.shared.stop(); click.stop(); bluetoothOutput.stop(); keyboard.stop(); bridge.stop(); started = false
     }
     func openMyWhoosh() {
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.whoosh.whooshgame") {
